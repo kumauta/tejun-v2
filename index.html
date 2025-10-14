@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tejun DSL Runner</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>手順管理ツール</h1>
+      <p class="tagline">DSLを入力して、実行用コマンドを整理・コピーできます。</p>
+    </header>
+    <main class="app">
+      <section class="dsl-editor">
+        <div class="section-header">
+          <h2>DSL入力</h2>
+          <button id="load-example" type="button">サンプルを読み込む</button>
+        </div>
+        <textarea id="dsl-input" placeholder="title: ...&#10;description: ...&#10;&#10;step: ...&#10;command: ..."></textarea>
+        <div class="actions">
+          <button id="parse-button" type="button">手順を更新</button>
+          <div id="parse-error" role="alert" aria-live="polite"></div>
+        </div>
+      </section>
+      <section class="steps-output">
+        <h2 id="procedure-title">手順一覧</h2>
+        <p id="procedure-description" class="procedure-description"></p>
+        <div id="steps-container" class="steps"></div>
+      </section>
+    </main>
+    <template id="step-template">
+      <article class="step">
+        <header class="step-header">
+          <h3 class="step-title"></h3>
+        </header>
+        <p class="step-notes"></p>
+        <ul class="commands"></ul>
+      </article>
+    </template>
+    <template id="command-template">
+      <li class="command">
+        <div class="command-main">
+          <code class="command-text"></code>
+          <button class="copy-button" type="button">コピー</button>
+        </div>
+        <div class="copy-history"></div>
+        <form class="evidence-form" hidden>
+          <label class="evidence-label">
+            <span>エビデンス</span>
+            <textarea
+              class="evidence-input"
+              placeholder="実行結果や確認事項を記録してください"
+              rows="3"
+              required
+            ></textarea>
+          </label>
+          <div class="evidence-actions">
+            <button class="evidence-save" type="submit">記録する</button>
+            <button class="evidence-cancel" type="button">閉じる</button>
+          </div>
+        </form>
+        <div class="evidence-records"></div>
+      </li>
+    </template>
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
