@@ -165,9 +165,19 @@ button:disabled {
 }
 
 .step-notes {
-  margin: 0.6rem 0 0;
+  margin: 0.75rem 0 0;
+  padding-left: 1.2rem;
   color: #1e293b;
   font-size: 0.95rem;
+  list-style: disc;
+}
+
+.step-notes li {
+  margin: 0 0 0.35rem;
+}
+
+.step-notes li:last-child {
+  margin-bottom: 0;
 }
 
 .commands {
@@ -202,6 +212,22 @@ button:disabled {
   color: #0f172a;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.command-notes {
+  margin: 0.6rem 0 0;
+  padding-left: 1.2rem;
+  color: #1f2933;
+  font-size: 0.9rem;
+  list-style: disc;
+}
+
+.command-notes li {
+  margin: 0 0 0.35rem;
+}
+
+.command-notes li:last-child {
+  margin-bottom: 0;
 }
 
 .copy-history {
@@ -425,6 +451,10 @@ button:disabled {
 
   .step-notes {
     color: #e2e8f0;
+  }
+
+  .command-notes {
+    color: #cbd5f5;
   }
 
   .command {

@@ -30,9 +30,12 @@ description: stagingサーバーへアプリケーションをデプロイする
 step: サーバーにログイン
 note: 作業アカウントを利用
 command: ssh deploy@staging.example.internal
+note: 接続後に sudo -s が利用できるか確認する
 
 step: アプリケーションを停止
 command: sudo systemctl stop example.service
+note: 停止完了まで最大30秒待機
+note: service status で停止を確認
 
 step: リポジトリを更新
 command: cd /srv/example
@@ -156,7 +159,7 @@ function parseDSL(source) {
         currentStep = {
           id: `step-${stepIndex++}`,
           title: value,
-          note: "",
+          stepNotes: [],
           commands: [],
         };
         break;
@@ -164,7 +167,15 @@ function parseDSL(source) {
         if (!currentStep) {
           throw new Error(`${lineNumber + 1} 行目で note が定義されていますが、直前に step がありません。`);
         }
-        currentStep.note = value;
+        if (!value) {
+          throw new Error(`${lineNumber + 1} 行目の note が空です。`);
+        }
+        if (currentStep.commands.length === 0) {
+          currentStep.stepNotes.push(value);
+        } else {
+          const targetCommand = currentStep.commands[currentStep.commands.length - 1];
+          targetCommand.notes.push(value);
+        }
         break;
       case "command":
         if (!currentStep) {
@@ -214,6 +225,7 @@ function parseDSL(source) {
           currentStep.commands.push({
             id: commandId,
             text: commandText,
+            notes: [],
           });
           lineIndex = blockIndex;
           continue;
@@ -222,6 +234,7 @@ function parseDSL(source) {
         currentStep.commands.push({
           id: commandId,
           text: value,
+          notes: [],
         });
         break;
       default:
@@ -263,11 +276,21 @@ function buildStepElement(step, displayIndex) {
   titleEl.textContent = `${displayIndex}. ${step.title}`;
 
   const notesEl = stepFragment.querySelector(".step-notes");
-  if (step.note) {
-    notesEl.textContent = step.note;
+  const stepNotes = Array.isArray(step.stepNotes)
+    ? step.stepNotes
+    : step.note
+    ? [step.note]
+    : [];
+  if (stepNotes.length > 0 && notesEl) {
+    notesEl.replaceChildren();
+    stepNotes.forEach((note) => {
+      const item = document.createElement("li");
+      item.textContent = note;
+      notesEl.appendChild(item);
+    });
     notesEl.style.display = "block";
-  } else {
-    notesEl.textContent = "";
+  } else if (notesEl) {
+    notesEl.replaceChildren();
     notesEl.style.display = "none";
   }
 
@@ -279,6 +302,7 @@ function buildStepElement(step, displayIndex) {
     const commandTextEl = commandFragment.querySelector(".command-text");
     const copyButton = commandFragment.querySelector(".copy-button");
     const historyEl = commandFragment.querySelector(".copy-history");
+    const commandNotesList = commandFragment.querySelector(".command-notes");
     const evidenceForm = commandFragment.querySelector(".evidence-form");
     const evidenceInput = commandFragment.querySelector(".evidence-input");
     const evidenceCancel = commandFragment.querySelector(".evidence-cancel");
@@ -298,6 +322,22 @@ function buildStepElement(step, displayIndex) {
     }
     updateEvidenceRecords(evidenceRecordsEl, evidenceRecords.get(command.id));
     hideEvidenceForm(evidenceForm);
+
+    if (commandNotesList) {
+      const commandNotes = Array.isArray(command.notes) ? command.notes : [];
+      if (commandNotes.length > 0) {
+        commandNotesList.replaceChildren();
+        commandNotes.forEach((note) => {
+          const item = document.createElement("li");
+          item.textContent = note;
+          commandNotesList.appendChild(item);
+        });
+        commandNotesList.style.display = "block";
+      } else {
+        commandNotesList.replaceChildren();
+        commandNotesList.style.display = "none";
+      }
+    }
 
     copyButton.addEventListener("click", () =>
       handleCopy(command, copyButton, historyEl, evidenceForm, evidenceInput),
@@ -563,8 +603,15 @@ function buildExportMarkdown(payload) {
 
   payload.steps.forEach((step) => {
     lines.push("", `## ${step.index}. ${step.title}`);
-    if (step.note) {
-      lines.push(`> ${step.note}`);
+    const stepNotes = Array.isArray(step.notes)
+      ? step.notes
+      : step.note
+      ? [step.note]
+      : [];
+    if (stepNotes.length > 0) {
+      stepNotes.forEach((note) => {
+        lines.push(`> ${note}`);
+      });
     }
 
     step.commands.forEach((command) => {
@@ -574,6 +621,14 @@ function buildExportMarkdown(payload) {
         lines.push(line);
       });
       lines.push("```");
+
+      const commandNotes = Array.isArray(command.notes) ? command.notes : [];
+      if (commandNotes.length > 0) {
+        lines.push("", "#### ノート");
+        commandNotes.forEach((note) => {
+          lines.push(`- ${note}`);
+        });
+      }
 
       if (command.copyHistory && command.copyHistory.length > 0) {
         lines.push("", "#### コピー履歴");
@@ -611,10 +666,16 @@ function buildExportPayload() {
 
   const steps = currentProcedure.steps
     .map((step, stepIndex) => {
+      const stepNotes = Array.isArray(step.stepNotes)
+        ? step.stepNotes
+        : step.note
+        ? [step.note]
+        : [];
       const commands = step.commands
         .map((command, commandIndex) => {
           const history = copyHistory.get(command.id) ?? [];
           const evidences = evidenceRecords.get(command.id) ?? [];
+          const commandNotes = Array.isArray(command.notes) ? command.notes : [];
           if (history.length === 0 && evidences.length === 0) {
             return null;
           }
@@ -622,6 +683,7 @@ function buildExportPayload() {
             index: commandIndex + 1,
             text: command.text,
             copyHistory: [...history],
+            notes: [...commandNotes],
             evidences: evidences.map((item) => ({
               timestamp: item.timestamp,
               iso: item.iso,
@@ -638,7 +700,7 @@ function buildExportPayload() {
       return {
         index: stepIndex + 1,
         title: step.title,
-        note: step.note,
+        notes: [...stepNotes],
         commands,
       };
     })
