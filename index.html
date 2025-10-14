@@ -29,6 +29,28 @@
         <div id="steps-container" class="steps"></div>
       </section>
     </main>
+    <section class="export-panel">
+      <h2>エクスポート</h2>
+      <p class="export-note">コピー済みの手順とエビデンスをMarkdown形式で表示します。</p>
+      <button id="export-button" type="button" disabled>実行結果を表示</button>
+    </section>
+    <div id="export-modal" class="modal" hidden>
+      <div
+        class="modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="export-modal-title"
+      >
+        <header class="modal-header">
+          <h3 id="export-modal-title">エクスポート結果 (Markdown)</h3>
+          <button id="export-close-button" type="button" class="modal-close">閉じる</button>
+        </header>
+        <div class="modal-actions">
+          <button id="export-copy-button" type="button">Markdownをコピー</button>
+        </div>
+        <textarea id="export-output" class="modal-output" readonly></textarea>
+      </div>
+    </div>
     <template id="step-template">
       <article class="step">
         <header class="step-header">

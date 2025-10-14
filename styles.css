@@ -103,6 +103,13 @@ button:active {
   box-shadow: none;
 }
 
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
 #parse-button {
   min-width: 140px;
 }
@@ -136,10 +143,11 @@ button:active {
 }
 
 .step {
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 1rem 1.25rem;
-  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(135deg, #f8fbff 0%, #ffffff 100%);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.12);
 }
 
 .step-header {
@@ -151,14 +159,15 @@ button:active {
 
 .step-title {
   margin: 0;
-  font-size: 1.1rem;
-  color: #0f172a;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #0b1120;
 }
 
 .step-notes {
-  margin: 0.5rem 0 0;
-  color: #475569;
-  font-size: 0.9rem;
+  margin: 0.6rem 0 0;
+  color: #1e293b;
+  font-size: 0.95rem;
 }
 
 .commands {
@@ -209,6 +218,104 @@ button:active {
   padding: 0.2rem 0.6rem;
   margin-right: 0.4rem;
   margin-bottom: 0.2rem;
+}
+
+.export-panel {
+  max-width: 900px;
+  margin: 0 auto 2rem;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  text-align: center;
+}
+
+.export-panel h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  color: #0f172a;
+}
+
+.export-note {
+  margin: 0.75rem 0 1.5rem;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+#export-button {
+  min-width: 220px;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  z-index: 1000;
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal-content {
+  width: min(800px, 90vw);
+  max-height: 90vh;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #0f172a;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.modal-close {
+  background: #94a3b8;
+}
+
+.modal-output {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 280px;
+  font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 1rem;
+  resize: vertical;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.modal-output:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
 }
 
 .evidence-form {
@@ -307,8 +414,17 @@ button:active {
   }
 
   .step {
-    background: #0f172a;
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
     border-color: #334155;
+    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.55);
+  }
+
+  .step-title {
+    color: #f8fafc;
+  }
+
+  .step-notes {
+    color: #e2e8f0;
   }
 
   .command {
@@ -327,6 +443,52 @@ button:active {
 
   button {
     background: #3b82f6;
+  }
+
+  button:disabled {
+    background: #3b82f6;
+    opacity: 0.4;
+  }
+
+  .modal {
+    background: rgba(15, 23, 42, 0.7);
+  }
+
+  .modal-content {
+    background: #1e293b;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  }
+
+  .modal-header h3 {
+    color: #e2e8f0;
+  }
+
+  .modal-output {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-color: #334155;
+  }
+
+  .modal-output:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.32);
+  }
+
+  .modal-close {
+    background: #64748b;
+  }
+
+  .export-panel {
+    background: #1e293b;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .export-panel h2 {
+    color: #f8fafc;
+  }
+
+  .export-note {
+    color: #cbd5f5;
   }
 
   .evidence-form {

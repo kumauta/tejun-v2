@@ -5,6 +5,11 @@ const parseError = document.getElementById("parse-error");
 const procedureTitle = document.getElementById("procedure-title");
 const procedureDescription = document.getElementById("procedure-description");
 const stepsContainer = document.getElementById("steps-container");
+const exportButton = document.getElementById("export-button");
+const exportModal = document.getElementById("export-modal");
+const exportOutput = document.getElementById("export-output");
+const exportCopyButton = document.getElementById("export-copy-button");
+const exportCloseButton = document.getElementById("export-close-button");
 
 const stepTemplate = document.getElementById("step-template");
 const commandTemplate = document.getElementById("command-template");
@@ -12,6 +17,12 @@ const commandTemplate = document.getElementById("command-template");
 const copyHistory = new Map();
 const evidenceRecords = new Map();
 let activeEvidenceForm = null;
+let currentProcedure = null;
+let lastExportMarkdown = "";
+
+if (exportCopyButton && !exportCopyButton.dataset.defaultLabel) {
+  exportCopyButton.dataset.defaultLabel = exportCopyButton.textContent || "Markdownをコピー";
+}
 
 const DEFAULT_DSL = `title: サーバーロールアウト手順
 description: stagingサーバーへアプリケーションをデプロイする例です。開始前にアラートを抑止してください。
@@ -46,6 +57,32 @@ loadExampleButton.addEventListener("click", () => {
 
 parseButton.addEventListener("click", () => {
   renderProcedureFromSource(dslInput.value);
+});
+
+exportButton.addEventListener("click", handleExportClick);
+
+if (exportCopyButton) {
+  exportCopyButton.addEventListener("click", handleExportCopy);
+}
+
+if (exportCloseButton) {
+  exportCloseButton.addEventListener("click", () => {
+    closeExportModal();
+  });
+}
+
+if (exportModal) {
+  exportModal.addEventListener("click", (event) => {
+    if (event.target === exportModal) {
+      closeExportModal();
+    }
+  });
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && exportModal && !exportModal.hidden) {
+    closeExportModal();
+  }
 });
 
 function renderProcedureFromSource(source) {
@@ -203,15 +240,19 @@ function parseDSL(source) {
 }
 
 function renderProcedure(procedure) {
+  currentProcedure = procedure;
   procedureTitle.textContent = procedure.title || "手順一覧";
   procedureDescription.textContent = procedure.description || "";
 
   stepsContainer.replaceChildren();
+  activeEvidenceForm = null;
 
   procedure.steps.forEach((step, index) => {
     const stepElement = buildStepElement(step, index + 1);
     stepsContainer.appendChild(stepElement);
   });
+
+  updateExportButtonState();
 }
 
 function buildStepElement(step, displayIndex) {
@@ -278,6 +319,7 @@ function buildStepElement(step, displayIndex) {
       updateEvidenceRecords(evidenceRecordsEl, records);
       evidenceInput.value = "";
       hideEvidenceForm(evidenceForm);
+      updateExportButtonState();
     });
 
     evidenceCancel.addEventListener("click", (event) => {
@@ -301,6 +343,7 @@ async function handleCopy(command, button, historyEl, evidenceForm, evidenceInpu
     copyHistory.set(command.id, historyList);
     updateHistory(historyEl, historyList);
     showEvidenceForm(evidenceForm, evidenceInput);
+    updateExportButtonState();
 
     const originalLabel = button.textContent;
     button.textContent = "コピー済み";
@@ -413,6 +456,201 @@ function formatTimestamp(date) {
     second: "2-digit",
     hour12: false,
   });
+}
+
+function commandHasActivity(commandId) {
+  const history = copyHistory.get(commandId);
+  const evidences = evidenceRecords.get(commandId);
+  return (history && history.length > 0) || (evidences && evidences.length > 0);
+}
+
+function updateExportButtonState() {
+  if (!exportButton) {
+    return;
+  }
+  if (!currentProcedure) {
+    exportButton.disabled = true;
+    return;
+  }
+  const hasExecuted = currentProcedure.steps.some((step) =>
+    step.commands.some((command) => commandHasActivity(command.id)),
+  );
+  exportButton.disabled = !hasExecuted;
+}
+
+function handleExportClick() {
+  const payload = buildExportPayload();
+  if (!payload || !payload.steps || payload.steps.length === 0) {
+    alert("エクスポート対象の実行済み手順がありません。");
+    return;
+  }
+  const markdown = buildExportMarkdown(payload);
+  lastExportMarkdown = markdown;
+  openExportModal(markdown);
+}
+
+function openExportModal(markdown) {
+  if (!exportModal || !exportOutput) {
+    return;
+  }
+  exportOutput.value = markdown;
+  exportOutput.scrollTop = 0;
+  exportModal.hidden = false;
+  if (exportCopyButton) {
+    const defaultLabel = exportCopyButton.dataset.defaultLabel || "Markdownをコピー";
+    exportCopyButton.textContent = defaultLabel;
+    exportCopyButton.disabled = false;
+    exportCopyButton.focus();
+  }
+}
+
+function closeExportModal() {
+  if (!exportModal || !exportOutput) {
+    return;
+  }
+  exportModal.hidden = true;
+  exportOutput.value = "";
+  lastExportMarkdown = "";
+  if (exportCopyButton) {
+    const defaultLabel = exportCopyButton.dataset.defaultLabel || "Markdownをコピー";
+    exportCopyButton.textContent = defaultLabel;
+    exportCopyButton.disabled = false;
+  }
+  if (exportButton) {
+    exportButton.focus();
+  }
+}
+
+async function handleExportCopy() {
+  if (!lastExportMarkdown) {
+    return;
+  }
+  if (!exportCopyButton) {
+    await writeToClipboard(lastExportMarkdown);
+    return;
+  }
+  const defaultLabel = exportCopyButton.dataset.defaultLabel || "Markdownをコピー";
+  try {
+    await writeToClipboard(lastExportMarkdown);
+    exportCopyButton.textContent = "コピー済み";
+    exportCopyButton.disabled = true;
+    setTimeout(() => {
+      exportCopyButton.textContent = defaultLabel;
+      exportCopyButton.disabled = false;
+    }, 1500);
+  } catch (error) {
+    console.error("Markdown copy failed", error);
+    exportCopyButton.textContent = "コピー失敗";
+    exportCopyButton.disabled = true;
+    setTimeout(() => {
+      exportCopyButton.textContent = defaultLabel;
+      exportCopyButton.disabled = false;
+    }, 2000);
+  }
+}
+
+function buildExportMarkdown(payload) {
+  const lines = [];
+  const title = payload.title && payload.title.trim() ? payload.title.trim() : "手順一覧";
+  lines.push(`# ${title}`);
+
+  if (payload.description) {
+    lines.push("", payload.description.trim());
+  }
+
+  lines.push("", `エクスポート日時: ${payload.exportedAt}`);
+  lines.push(`エクスポートISO: ${payload.exportedAtIso}`);
+
+  payload.steps.forEach((step) => {
+    lines.push("", `## ${step.index}. ${step.title}`);
+    if (step.note) {
+      lines.push(`> ${step.note}`);
+    }
+
+    step.commands.forEach((command) => {
+      lines.push("", `### コマンド ${step.index}.${command.index}`);
+      lines.push("", "```sh");
+      command.text.split("\n").forEach((line) => {
+        lines.push(line);
+      });
+      lines.push("```");
+
+      if (command.copyHistory && command.copyHistory.length > 0) {
+        lines.push("", "#### コピー履歴");
+        command.copyHistory.forEach((timestamp) => {
+          lines.push(`- ${timestamp}`);
+        });
+      }
+
+      if (command.evidences && command.evidences.length > 0) {
+        lines.push("", "#### エビデンス");
+        command.evidences.forEach((item) => {
+          lines.push(`- ${item.timestamp}`);
+          if (item.text) {
+            lines.push("```");
+            item.text.split("\n").forEach((line) => {
+              lines.push(line);
+            });
+            lines.push("```");
+          }
+        });
+      }
+    });
+  });
+
+  const result = lines.join("\n").trim();
+  return result ? `${result}\n` : "";
+}
+
+function buildExportPayload() {
+  if (!currentProcedure) {
+    return null;
+  }
+
+  const exportedAtDate = new Date();
+
+  const steps = currentProcedure.steps
+    .map((step, stepIndex) => {
+      const commands = step.commands
+        .map((command, commandIndex) => {
+          const history = copyHistory.get(command.id) ?? [];
+          const evidences = evidenceRecords.get(command.id) ?? [];
+          if (history.length === 0 && evidences.length === 0) {
+            return null;
+          }
+          return {
+            index: commandIndex + 1,
+            text: command.text,
+            copyHistory: [...history],
+            evidences: evidences.map((item) => ({
+              timestamp: item.timestamp,
+              iso: item.iso,
+              text: item.text,
+            })),
+          };
+        })
+        .filter(Boolean);
+
+      if (commands.length === 0) {
+        return null;
+      }
+
+      return {
+        index: stepIndex + 1,
+        title: step.title,
+        note: step.note,
+        commands,
+      };
+    })
+    .filter(Boolean);
+
+  return {
+    title: currentProcedure.title,
+    description: currentProcedure.description,
+    exportedAt: formatTimestamp(exportedAtDate),
+    exportedAtIso: exportedAtDate.toISOString(),
+    steps,
+  };
 }
 
 // 初期化
