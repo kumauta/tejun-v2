@@ -60,7 +60,16 @@ section {
 
 .section-header h2 {
   margin: 0;
+}
+
+.section-header h2,
+#procedure-title,
+.export-panel h2 {
   font-size: 1.2rem;
+}
+
+#procedure-title {
+  margin: 0;
 }
 
 button {
@@ -260,7 +269,6 @@ button:disabled {
 
 .export-panel h2 {
   margin: 0;
-  font-size: 1.3rem;
   color: #0f172a;
   text-align: left;
 }
