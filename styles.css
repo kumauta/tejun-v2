@@ -64,6 +64,7 @@ section {
 
 .section-header h2,
 #procedure-title,
+.variables-panel h2,
 .export-panel h2 {
   font-size: 1.2rem;
 }
@@ -265,6 +266,61 @@ button:disabled {
   padding: 1.5rem;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
   text-align: left;
+}
+
+.variables-panel {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.variables-panel h2 {
+  margin: 0;
+}
+
+.variables-fields {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.variable-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.variable-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.variable-input {
+  font-size: 0.95rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  font-family: inherit;
+}
+
+.variable-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+
+.variables-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 0.5rem;
+}
+
+#apply-variables {
+  min-width: 160px;
 }
 
 .export-panel h2 {
@@ -481,6 +537,26 @@ button:disabled {
 
   .command-warnings {
     color: #fca5a5;
+  }
+
+  .variables-panel {
+    background: #1e293b;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .variable-label {
+    color: #e2e8f0;
+  }
+
+  .variable-input {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-color: #334155;
+  }
+
+  .variable-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.32);
   }
 
   .command {

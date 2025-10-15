@@ -5,6 +5,10 @@ const parseError = document.getElementById("parse-error");
 const procedureTitle = document.getElementById("procedure-title");
 const procedureDescription = document.getElementById("procedure-description");
 const stepsContainer = document.getElementById("steps-container");
+const variablesPanel = document.getElementById("variables-panel");
+const variablesForm = document.getElementById("variables-form");
+const variablesFields = document.getElementById("variables-fields");
+const applyVariablesButton = document.getElementById("apply-variables");
 const exportButton = document.getElementById("export-button");
 const exportModal = document.getElementById("export-modal");
 const exportOutput = document.getElementById("export-output");
@@ -17,8 +21,12 @@ const commandTemplate = document.getElementById("command-template");
 const copyHistory = new Map();
 const evidenceRecords = new Map();
 let activeEvidenceForm = null;
+const VARIABLE_PATTERN = /\{\{([A-Za-z0-9_]+)\}\}/g;
 let currentProcedure = null;
 let lastExportMarkdown = "";
+let currentVariables = [];
+let currentVariableValues = new Map();
+let pendingVariableValues = new Map();
 
 if (exportCopyButton && !exportCopyButton.dataset.defaultLabel) {
   exportCopyButton.dataset.defaultLabel = exportCopyButton.textContent || "Markdownをコピー";
@@ -29,32 +37,32 @@ description: stagingサーバーへアプリケーションをデプロイする
 
 step: サーバーにログイン
 note: 作業アカウントを利用
-command: ssh deploy@staging.example.internal
+command: ssh deploy@{{TARGET_HOST}}
 note: 接続後に sudo -s が利用できるか確認する
 warn: アクセスはメンテナンス時間内のみ許可
 warning: ログイン後は即座に作業記録を開始する
 
 step: アプリケーションを停止
-command: sudo systemctl stop example.service
+command: sudo systemctl stop {{SERVICE_NAME}}
 note: 停止完了まで最大30秒待機
 note: service status で停止を確認
 warn: 稼働中セッションがないか必ず確認
 warning: 停止後は監視に手動通知を行うこと
 
 step: リポジトリを更新
-command: cd /srv/example
+command: cd {{APP_DIRECTORY}}
 command: git pull --ff-only origin main
 
 step: 多行コマンドの例
 command: |
-  echo "Checking disk usage"
+  echo "Checking disk usage on {{TARGET_HOST}}"
   df -h /
-  du -sh /srv/example
+  du -sh {{APP_DIRECTORY}}
 
 step: アプリケーションを再起動
 note: 起動成功を確認したらアラート抑止を解除する
-command: sudo systemctl start example.service
-command: sudo systemctl status example.service
+command: sudo systemctl start {{SERVICE_NAME}}
+command: sudo systemctl status {{SERVICE_NAME}}
 `;
 
 loadExampleButton.addEventListener("click", () => {
@@ -91,6 +99,27 @@ document.addEventListener("keydown", (event) => {
     closeExportModal();
   }
 });
+
+if (variablesForm) {
+  variablesForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+  });
+}
+
+if (applyVariablesButton) {
+  applyVariablesButton.addEventListener("click", () => {
+    const nextValues = new Map();
+    currentVariables.forEach((name) => {
+      const value = (pendingVariableValues.get(name) ?? "").trim();
+      nextValues.set(name, value);
+    });
+    currentVariableValues = nextValues;
+    pendingVariableValues = new Map(nextValues);
+    if (currentProcedure) {
+      renderProcedure(currentProcedure);
+    }
+  });
+}
 
 function renderProcedureFromSource(source) {
   try {
@@ -255,21 +284,25 @@ function parseDSL(source) {
           }
           const commandText = blockLines.join("\n");
           const commandId = `${currentStep.id}__cmd_${currentStep.commands.length}`;
+          const commandVariables = extractVariables(commandText);
           currentStep.commands.push({
             id: commandId,
             text: commandText,
             notes: [],
             warnings: [],
+            variables: commandVariables,
           });
           lineIndex = blockIndex;
           continue;
         }
         const commandId = `${currentStep.id}__cmd_${currentStep.commands.length}`;
+        const commandVariables = extractVariables(value);
         currentStep.commands.push({
           id: commandId,
           text: value,
           notes: [],
           warnings: [],
+          variables: commandVariables,
         });
         break;
       default:
@@ -291,6 +324,10 @@ function renderProcedure(procedure) {
   currentProcedure = procedure;
   procedureTitle.textContent = procedure.title || "手順一覧";
   procedureDescription.textContent = procedure.description || "";
+
+  const variables = collectVariables(procedure);
+  syncVariableState(variables);
+  renderVariableControls(variables);
 
   stepsContainer.replaceChildren();
   activeEvidenceForm = null;
@@ -365,8 +402,21 @@ function buildStepElement(step, displayIndex) {
     const evidenceCancel = commandFragment.querySelector(".evidence-cancel");
     const evidenceRecordsEl = commandFragment.querySelector(".evidence-records");
 
-    commandTextEl.textContent = command.text;
+    const resolvedText = resolveCommandText(command);
+    commandTextEl.textContent = resolvedText;
     listItem.dataset.commandId = command.id;
+    if (!copyButton.dataset.defaultLabel) {
+      copyButton.dataset.defaultLabel = copyButton.textContent;
+    }
+
+    const commandReady = areCommandVariablesResolved(command);
+    if (!commandReady && command.variables.length > 0) {
+      copyButton.disabled = true;
+      copyButton.textContent = "変数未設定";
+    } else {
+      copyButton.disabled = false;
+      copyButton.textContent = copyButton.dataset.defaultLabel || "コピー";
+    }
 
     const historyKey = command.id;
     if (!copyHistory.has(historyKey)) {
@@ -448,7 +498,17 @@ function buildStepElement(step, displayIndex) {
 
 async function handleCopy(command, button, historyEl, evidenceForm, evidenceInput) {
   try {
-    await writeToClipboard(command.text);
+    if (!areCommandVariablesResolved(command)) {
+      button.textContent = "変数未設定";
+      button.disabled = true;
+      setTimeout(() => {
+        button.textContent = button.dataset.defaultLabel || "コピー";
+        button.disabled = false;
+      }, 1500);
+      return;
+    }
+    const resolvedText = resolveCommandText(command);
+    await writeToClipboard(resolvedText);
     const timestamp = formatTimestamp(new Date());
 
     const historyList = copyHistory.get(command.id) ?? [];
@@ -571,6 +631,158 @@ function formatTimestamp(date) {
   });
 }
 
+function extractVariables(text) {
+  if (!text) {
+    return [];
+  }
+  const names = new Set();
+  text.replace(VARIABLE_PATTERN, (_match, name) => {
+    if (name) {
+      names.add(name);
+    }
+    return _match;
+  });
+  return Array.from(names);
+}
+
+function collectVariables(procedure) {
+  if (!procedure) {
+    return [];
+  }
+  const names = new Set();
+  procedure.steps.forEach((step) => {
+    step.commands.forEach((command) => {
+      (command.variables || []).forEach((name) => names.add(name));
+    });
+  });
+  return Array.from(names).sort((a, b) => a.localeCompare(b));
+}
+
+function syncVariableState(variables) {
+  const nextPending = new Map();
+  variables.forEach((name) => {
+    if (pendingVariableValues.has(name)) {
+      nextPending.set(name, pendingVariableValues.get(name));
+    } else if (currentVariableValues.has(name)) {
+      nextPending.set(name, currentVariableValues.get(name));
+    } else {
+      nextPending.set(name, "");
+    }
+  });
+  pendingVariableValues = nextPending;
+
+  const nextCurrent = new Map();
+  variables.forEach((name) => {
+    if (currentVariableValues.has(name)) {
+      nextCurrent.set(name, currentVariableValues.get(name));
+    }
+  });
+  currentVariableValues = nextCurrent;
+  currentVariables = variables;
+}
+
+function renderVariableControls(variables) {
+  if (!variablesPanel || !variablesFields || !applyVariablesButton) {
+    return;
+  }
+
+  if (!variables || variables.length === 0) {
+    variablesPanel.hidden = true;
+    variablesFields.replaceChildren();
+    applyVariablesButton.disabled = true;
+    pendingVariableValues = new Map();
+    currentVariables = [];
+    return;
+  }
+
+  variablesPanel.hidden = false;
+  variablesFields.replaceChildren();
+
+  variables.forEach((name) => {
+    const field = document.createElement("div");
+    field.className = "variable-field";
+
+    const label = document.createElement("label");
+    label.className = "variable-label";
+    label.setAttribute("for", `variable-${name}`);
+    label.textContent = `{{${name}}}`;
+
+    const input = document.createElement("input");
+    input.className = "variable-input";
+    input.type = "text";
+    input.id = `variable-${name}`;
+    input.name = name;
+    input.autocomplete = "off";
+    input.value = pendingVariableValues.get(name) ?? "";
+    input.placeholder = `${name} の値`;
+    input.addEventListener("input", (event) => {
+      pendingVariableValues.set(name, event.target.value);
+      updateApplyButtonState();
+    });
+
+    field.appendChild(label);
+    field.appendChild(input);
+    variablesFields.appendChild(field);
+  });
+
+  updateApplyButtonState();
+  updateExportButtonState();
+}
+
+function updateApplyButtonState() {
+  if (!applyVariablesButton) {
+    return;
+  }
+  if (!currentVariables || currentVariables.length === 0) {
+    applyVariablesButton.disabled = true;
+    return;
+  }
+  applyVariablesButton.disabled = !areAllPendingVariablesFilled();
+}
+
+function areAllPendingVariablesFilled() {
+  if (!currentVariables || currentVariables.length === 0) {
+    return false;
+  }
+  return currentVariables.every((name) => {
+    const value = pendingVariableValues.get(name);
+    return typeof value === "string" && value.trim().length > 0;
+  });
+}
+
+function areAllVariablesResolved() {
+  if (!currentVariables || currentVariables.length === 0) {
+    return true;
+  }
+  return currentVariables.every((name) => {
+    const value = currentVariableValues.get(name);
+    return typeof value === "string" && value.length > 0;
+  });
+}
+
+function areCommandVariablesResolved(command) {
+  if (!command.variables || command.variables.length === 0) {
+    return true;
+  }
+  return command.variables.every((name) => {
+    const value = currentVariableValues.get(name);
+    return typeof value === "string" && value.length > 0;
+  });
+}
+
+function resolveCommandText(command) {
+  if (!command || typeof command.text !== "string") {
+    return "";
+  }
+  return command.text.replace(VARIABLE_PATTERN, (match, name) => {
+    const value = currentVariableValues.get(name);
+    if (typeof value === "string" && value.length > 0) {
+      return value;
+    }
+    return match;
+  });
+}
+
 function commandHasActivity(commandId) {
   const history = copyHistory.get(commandId);
   const evidences = evidenceRecords.get(commandId);
@@ -582,6 +794,10 @@ function updateExportButtonState() {
     return;
   }
   if (!currentProcedure) {
+    exportButton.disabled = true;
+    return;
+  }
+  if (currentVariables.length > 0 && !areAllVariablesResolved()) {
     exportButton.disabled = true;
     return;
   }
@@ -701,6 +917,16 @@ function buildExportMarkdown(payload) {
       });
       lines.push("```");
 
+      const variableList = Array.isArray(command.variables) ? command.variables : [];
+      const variableValues = command.variableValues || {};
+      if (variableList.length > 0) {
+        lines.push("", "#### 変数");
+        variableList.forEach((name) => {
+          const value = variableValues[name];
+          lines.push(`- ${name}: ${value && value.length > 0 ? value : "(未設定)"}`);
+        });
+      }
+
       const commandNotes = Array.isArray(command.notes) ? command.notes : [];
       if (commandNotes.length > 0) {
         lines.push("", "#### ノート");
@@ -769,12 +995,24 @@ function buildExportPayload() {
           const evidences = evidenceRecords.get(command.id) ?? [];
           const commandNotes = Array.isArray(command.notes) ? command.notes : [];
           const commandWarnings = Array.isArray(command.warnings) ? command.warnings : [];
+          const commandVariables = Array.isArray(command.variables) ? command.variables : [];
+          const variableValues = {};
+          commandVariables.forEach((name) => {
+            variableValues[name] = currentVariableValues.get(name) ?? "";
+          });
+          const resolvedText = resolveCommandText(command);
+          const exportText = areCommandVariablesResolved(command)
+            ? resolvedText
+            : command.text;
           if (history.length === 0 && evidences.length === 0) {
             return null;
           }
           return {
             index: commandIndex + 1,
-            text: command.text,
+            text: exportText,
+            raw: command.text,
+            variables: [...commandVariables],
+            variableValues,
             copyHistory: [...history],
             notes: [...commandNotes],
             warnings: [...commandWarnings],
