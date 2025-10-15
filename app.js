@@ -31,11 +31,15 @@ step: サーバーにログイン
 note: 作業アカウントを利用
 command: ssh deploy@staging.example.internal
 note: 接続後に sudo -s が利用できるか確認する
+warn: アクセスはメンテナンス時間内のみ許可
+warning: ログイン後は即座に作業記録を開始する
 
 step: アプリケーションを停止
 command: sudo systemctl stop example.service
 note: 停止完了まで最大30秒待機
 note: service status で停止を確認
+warn: 稼働中セッションがないか必ず確認
+warning: 停止後は監視に手動通知を行うこと
 
 step: リポジトリを更新
 command: cd /srv/example
@@ -109,7 +113,16 @@ function parseDSL(source) {
 
   let currentStep = null;
   let stepIndex = 0;
-  const knownKeywords = new Set(["title", "description", "step", "note", "command"]);
+  const knownKeywords = new Set([
+    "title",
+    "description",
+    "step",
+    "note",
+    "warn",
+    "warning",
+    "warnings",
+    "command",
+  ]);
 
   const finalizeCurrentStep = () => {
     if (!currentStep) {
@@ -160,6 +173,7 @@ function parseDSL(source) {
           id: `step-${stepIndex++}`,
           title: value,
           stepNotes: [],
+          stepWarnings: [],
           commands: [],
         };
         break;
@@ -177,6 +191,25 @@ function parseDSL(source) {
           targetCommand.notes.push(value);
         }
         break;
+      case "warn":
+      case "warning":
+      case "warnings": {
+        if (!currentStep) {
+          throw new Error(
+            `${lineNumber + 1} 行目で warn/warning が定義されていますが、直前に step がありません。`,
+          );
+        }
+        if (!value) {
+          throw new Error(`${lineNumber + 1} 行目の warn/warning が空です。`);
+        }
+        if (currentStep.commands.length === 0) {
+          currentStep.stepWarnings.push(value);
+        } else {
+          const targetCommand = currentStep.commands[currentStep.commands.length - 1];
+          targetCommand.warnings.push(value);
+        }
+        break;
+      }
       case "command":
         if (!currentStep) {
           throw new Error(`${lineNumber + 1} 行目で command が定義されていますが、直前に step がありません。`);
@@ -226,6 +259,7 @@ function parseDSL(source) {
             id: commandId,
             text: commandText,
             notes: [],
+            warnings: [],
           });
           lineIndex = blockIndex;
           continue;
@@ -235,6 +269,7 @@ function parseDSL(source) {
           id: commandId,
           text: value,
           notes: [],
+          warnings: [],
         });
         break;
       default:
@@ -276,6 +311,7 @@ function buildStepElement(step, displayIndex) {
   titleEl.textContent = `${displayIndex}. ${step.title}`;
 
   const notesEl = stepFragment.querySelector(".step-notes");
+  const stepWarningsEl = stepFragment.querySelector(".step-warnings");
   const stepNotes = Array.isArray(step.stepNotes)
     ? step.stepNotes
     : step.note
@@ -294,6 +330,26 @@ function buildStepElement(step, displayIndex) {
     notesEl.style.display = "none";
   }
 
+  const stepWarnings = Array.isArray(step.stepWarnings)
+    ? step.stepWarnings
+    : step.warning
+    ? [step.warning]
+    : [];
+  if (stepWarningsEl) {
+    if (stepWarnings.length > 0) {
+      stepWarningsEl.replaceChildren();
+      stepWarnings.forEach((warning) => {
+        const item = document.createElement("li");
+        item.textContent = warning;
+        stepWarningsEl.appendChild(item);
+      });
+      stepWarningsEl.style.display = "block";
+    } else {
+      stepWarningsEl.replaceChildren();
+      stepWarningsEl.style.display = "none";
+    }
+  }
+
   const commandsList = stepFragment.querySelector(".commands");
 
   step.commands.forEach((command, commandIndex) => {
@@ -303,6 +359,7 @@ function buildStepElement(step, displayIndex) {
     const copyButton = commandFragment.querySelector(".copy-button");
     const historyEl = commandFragment.querySelector(".copy-history");
     const commandNotesList = commandFragment.querySelector(".command-notes");
+    const commandWarningsList = commandFragment.querySelector(".command-warnings");
     const evidenceForm = commandFragment.querySelector(".evidence-form");
     const evidenceInput = commandFragment.querySelector(".evidence-input");
     const evidenceCancel = commandFragment.querySelector(".evidence-cancel");
@@ -336,6 +393,22 @@ function buildStepElement(step, displayIndex) {
       } else {
         commandNotesList.replaceChildren();
         commandNotesList.style.display = "none";
+      }
+    }
+
+    if (commandWarningsList) {
+      const commandWarnings = Array.isArray(command.warnings) ? command.warnings : [];
+      if (commandWarnings.length > 0) {
+        commandWarningsList.replaceChildren();
+        commandWarnings.forEach((warning) => {
+          const item = document.createElement("li");
+          item.textContent = warning;
+          commandWarningsList.appendChild(item);
+        });
+        commandWarningsList.style.display = "block";
+      } else {
+        commandWarningsList.replaceChildren();
+        commandWarningsList.style.display = "none";
       }
     }
 
@@ -613,6 +686,12 @@ function buildExportMarkdown(payload) {
         lines.push(`> ${note}`);
       });
     }
+    const stepWarnings = Array.isArray(step.warnings) ? step.warnings : [];
+    if (stepWarnings.length > 0) {
+      stepWarnings.forEach((warning) => {
+        lines.push(`> **警告:** ${warning}`);
+      });
+    }
 
     step.commands.forEach((command) => {
       lines.push("", `### コマンド ${step.index}.${command.index}`);
@@ -627,6 +706,14 @@ function buildExportMarkdown(payload) {
         lines.push("", "#### ノート");
         commandNotes.forEach((note) => {
           lines.push(`- ${note}`);
+        });
+      }
+
+      const commandWarnings = Array.isArray(command.warnings) ? command.warnings : [];
+      if (commandWarnings.length > 0) {
+        lines.push("", "#### 警告");
+        commandWarnings.forEach((warning) => {
+          lines.push(`- ${warning}`);
         });
       }
 
@@ -671,11 +758,17 @@ function buildExportPayload() {
         : step.note
         ? [step.note]
         : [];
+      const stepWarnings = Array.isArray(step.stepWarnings)
+        ? step.stepWarnings
+        : step.warning
+        ? [step.warning]
+        : [];
       const commands = step.commands
         .map((command, commandIndex) => {
           const history = copyHistory.get(command.id) ?? [];
           const evidences = evidenceRecords.get(command.id) ?? [];
           const commandNotes = Array.isArray(command.notes) ? command.notes : [];
+          const commandWarnings = Array.isArray(command.warnings) ? command.warnings : [];
           if (history.length === 0 && evidences.length === 0) {
             return null;
           }
@@ -684,6 +777,7 @@ function buildExportPayload() {
             text: command.text,
             copyHistory: [...history],
             notes: [...commandNotes],
+            warnings: [...commandWarnings],
             evidences: evidences.map((item) => ({
               timestamp: item.timestamp,
               iso: item.iso,
@@ -701,6 +795,7 @@ function buildExportPayload() {
         index: stepIndex + 1,
         title: step.title,
         notes: [...stepNotes],
+        warnings: [...stepWarnings],
         commands,
       };
     })
