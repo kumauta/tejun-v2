@@ -705,7 +705,7 @@ function renderVariableControls(variables) {
     const label = document.createElement("label");
     label.className = "variable-label";
     label.setAttribute("for", `variable-${name}`);
-    label.textContent = `{{${name}}}`;
+    label.textContent = name;
 
     const input = document.createElement("input");
     input.className = "variable-input";
