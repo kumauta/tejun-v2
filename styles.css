@@ -208,6 +208,10 @@ button:disabled {
 .copy-button {
   justify-self: end;
   white-space: nowrap;
+  min-width: 7.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .command-text {
