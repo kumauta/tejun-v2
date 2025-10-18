@@ -109,3 +109,10 @@ command: sudo systemctl restart {{SERVICE_NAME}}
 - 追加のビルドステップや依存パッケージはありません。HTML/CSS/JSで完結しています。
 - コピー履歴やエビデンスはブラウザ上のメモリで管理しており、ページ更新でリセットされます。
 - エクスポートはMarkdownとして画面表示し、ブラウザ内でコピーするだけなのでネットワーク送信は発生しません。
+
+## ローカル実行方法
+1. `docker run --name nginx --rm -p 8080:80 -v $PWD:/usr/share/nginx/html:ro nginx` を実行します。
+2. ブラウザで `http://localhost:8080/` にアクセスします。
+
+## オンライン版
+1. ブラウザで https://kumauta.github.io/tejun-v2/ にアクセスします。
