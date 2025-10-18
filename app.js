@@ -54,7 +54,7 @@ warn: アクセスはメンテナンス時間内のみ許可
 warning: ログイン後は即座に作業記録を開始する
 
 step: アプリケーションを停止
-command: sudo systemctl stop {{SERVICE_NAME}}
+root_command: systemctl stop {{SERVICE_NAME}}
 note: 停止完了まで最大30秒待機
 note: service status で停止を確認
 warn: 稼働中セッションがないか必ず確認
@@ -72,8 +72,8 @@ command: |
 
 step: アプリケーションを再起動
 note: 起動成功を確認したらアラート抑止を解除する
-command: sudo systemctl start {{SERVICE_NAME}}
-command: sudo systemctl status {{SERVICE_NAME}}
+root_command: systemctl start {{SERVICE_NAME}}
+root_command: systemctl status {{SERVICE_NAME}}
 `;
 
 loadExampleButton.addEventListener("click", () => {
@@ -182,6 +182,7 @@ function parseDSL(source) {
     "warning",
     "warnings",
     "command",
+    "root_command",
     "env",
   ]);
 
@@ -272,12 +273,14 @@ function parseDSL(source) {
         break;
       }
       case "command":
+      case "root_command": {
         if (!currentStep) {
-          throw new Error(`${lineNumber + 1} 行目で command が定義されていますが、直前に step がありません。`);
+          throw new Error(`${lineNumber + 1} 行目で ${keyword} が定義されていますが、直前に step がありません。`);
         }
         if (!value) {
-          throw new Error(`${lineNumber + 1} 行目の command が空です。`);
+          throw new Error(`${lineNumber + 1} 行目の ${keyword} が空です。`);
         }
+        const isRootCommand = keyword === "root_command";
         if (value === "|") {
           const blockLines = [];
           let blockIndex = lineIndex + 1;
@@ -312,7 +315,7 @@ function parseDSL(source) {
             blockIndex += 1;
           }
           if (blockLines.length === 0) {
-            throw new Error(`${lineNumber + 1} 行目の command ブロックに内容がありません。`);
+            throw new Error(`${lineNumber + 1} 行目の ${keyword} ブロックに内容がありません。`);
           }
           const commandText = blockLines.join("\n");
           const commandId = `${currentStep.id}__cmd_${currentStep.commands.length}`;
@@ -323,6 +326,7 @@ function parseDSL(source) {
             notes: [],
             warnings: [],
             variables: commandVariables,
+            isRoot: isRootCommand,
           });
           lineIndex = blockIndex;
           continue;
@@ -335,8 +339,10 @@ function parseDSL(source) {
           notes: [],
           warnings: [],
           variables: commandVariables,
+          isRoot: isRootCommand,
         });
         break;
+      }
       case "env": {
         if (!value) {
           throw new Error(`${lineNumber + 1} 行目の env が空です。`);
@@ -454,8 +460,9 @@ function buildStepElement(step, displayIndex) {
     const evidenceCancel = commandFragment.querySelector(".evidence-cancel");
     const evidenceRecordsEl = commandFragment.querySelector(".evidence-records");
 
-    const resolvedText = resolveCommandText(command);
-    commandTextEl.textContent = resolvedText;
+    const resolvedText = resolveCommandResolvedText(command);
+    const displayText = formatCommandDisplayText(command, resolvedText);
+    commandTextEl.textContent = displayText;
     listItem.dataset.commandId = command.id;
     if (!copyButton.dataset.defaultLabel) {
       copyButton.dataset.defaultLabel = copyButton.textContent;
@@ -559,7 +566,7 @@ async function handleCopy(command, button, historyEl, evidenceForm, evidenceInpu
       }, 1500);
       return;
     }
-    const resolvedText = resolveCommandText(command);
+    const resolvedText = resolveCommandResolvedText(command);
     await writeToClipboard(resolvedText);
     const timestamp = formatTimestamp(new Date());
 
@@ -833,7 +840,7 @@ function areCommandVariablesResolved(command) {
   });
 }
 
-function resolveCommandText(command) {
+function resolveCommandResolvedText(command) {
   if (!command || typeof command.text !== "string") {
     return "";
   }
@@ -844,6 +851,19 @@ function resolveCommandText(command) {
     }
     return match;
   });
+}
+
+function getCommandPrefix(command) {
+  return command && command.isRoot ? "#" : "$";
+}
+
+function formatCommandDisplayText(command, resolvedText) {
+  const prefix = getCommandPrefix(command);
+  const baseText = typeof resolvedText === "string" ? resolvedText : "";
+  const lines = baseText.length > 0 ? baseText.split("\n") : [""];
+  return lines
+    .map((line) => (line && line.length > 0 ? `${prefix} ${line}` : prefix))
+    .join("\n");
 }
 
 function commandHasActivity(commandId) {
@@ -1115,7 +1135,7 @@ function buildExportPayload() {
           commandVariables.forEach((name) => {
             variableValues[name] = currentVariableValues.get(name) ?? "";
           });
-          const resolvedText = resolveCommandText(command);
+          const resolvedText = resolveCommandResolvedText(command);
           const exportText = areCommandVariablesResolved(command)
             ? resolvedText
             : command.text;
@@ -1128,6 +1148,7 @@ function buildExportPayload() {
             raw: command.text,
             variables: [...commandVariables],
             variableValues,
+            isRoot: !!command.isRoot,
             copyHistory: [...history],
             notes: [...commandNotes],
             warnings: [...commandWarnings],

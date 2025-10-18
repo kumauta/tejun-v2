@@ -41,7 +41,8 @@ command: ...
 - `step` は必須で、ステップタイトルを設定します。
 - `note` は直前の `step` / `command` に対する補足説明です（任意、複数可）。
 - `warn`（または `warning`）は `note` と同じ書き方で、画面上では赤字で強調表示されます。
-- `command` は1つ以上必要です。同じステップ内で複数指定すると、実行順のリストとして表示されます。
+- `command` は1つ以上必要です。同じステップ内で複数指定すると、実行順のリストとして表示されます（画面表示時は先頭に `$` が付与されますが、コピー内容には含まれません）。
+- `root_command` は root 権限で実行するコマンドです。表示時は先頭に `#` が付与され、コピー時には取り除かれます。
 - `env` を使うと、変数入力フォームへ初期値を埋め込めます（例: `env: TARGET_HOST=stg-app01`）。
 - `#` または `//` で始まる行はコメントとして無視されます。
 
@@ -67,11 +68,12 @@ command: |
 ```
 step: サービス停止
 note: 作業時間は通知済みか確認
-command: sudo systemctl stop example.service
+root_command: systemctl stop example.service
 note: 停止には最大30秒かかる
 note: 停止後にアラート抑止を継続
 warning: 同時間帯に他ジョブが無いか再確認
 warn: 作業完了後に監視へ連絡する
+root_command: systemctl restart example.service
 ```
 
 ### 変数の使い方
