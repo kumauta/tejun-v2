@@ -96,7 +96,9 @@ button:active {
 }
 
 button:disabled {
-  opacity: 0.55;
+  background: #94a3b8;
+  color: #fff;
+  opacity: 1;
   cursor: not-allowed;
   box-shadow: none;
   transform: none;
@@ -206,6 +208,10 @@ button:disabled {
 .copy-button {
   justify-self: end;
   white-space: nowrap;
+  min-width: 7.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .command-text {
@@ -578,8 +584,9 @@ button:disabled {
   }
 
   button:disabled {
-    background: #3b82f6;
-    opacity: 0.4;
+    background: #475569;
+    color: #e2e8f0;
+    opacity: 1;
   }
 
   .modal {
