@@ -27,6 +27,7 @@ let lastExportMarkdown = "";
 let currentVariables = [];
 let currentVariableValues = new Map();
 let pendingVariableValues = new Map();
+let currentEnvironmentDefaults = new Map();
 let hasUnsavedChanges = false;
 
 const markUnsavedChanges = () => {
@@ -39,6 +40,10 @@ if (exportCopyButton && !exportCopyButton.dataset.defaultLabel) {
 
 const DEFAULT_DSL = `title: サーバーロールアウト手順
 description: stagingサーバーへアプリケーションをデプロイする例です。開始前にアラートを抑止してください。
+
+env: TARGET_HOST=stg-app01.internal
+env: SERVICE_NAME=sample-app
+env: APP_DIRECTORY=/srv/sample-app
 
 step: サーバーにログイン
 note: 作業アカウントを利用
@@ -158,6 +163,7 @@ function parseDSL(source) {
     title: "手順一覧",
     description: "",
     steps: [],
+    environment: new Map(),
   };
 
   let currentStep = null;
@@ -171,6 +177,7 @@ function parseDSL(source) {
     "warning",
     "warnings",
     "command",
+    "env",
   ]);
 
   const finalizeCurrentStep = () => {
@@ -325,6 +332,22 @@ function parseDSL(source) {
           variables: commandVariables,
         });
         break;
+      case "env": {
+        if (!value) {
+          throw new Error(`${lineNumber + 1} 行目の env が空です。`);
+        }
+        const delimiter = value.indexOf("=");
+        if (delimiter === -1) {
+          throw new Error(`${lineNumber + 1} 行目の env は NAME=VALUE の形式で指定してください。`);
+        }
+        const name = value.slice(0, delimiter).trim();
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+          throw new Error(`${lineNumber + 1} 行目の env 名 "${name}" が不正です。`);
+        }
+        const envValue = value.slice(delimiter + 1).trim();
+        procedure.environment.set(name, envValue);
+        break;
+      }
       default:
         throw new Error(`${lineNumber + 1} 行目のキーワード "${keyword}" は未対応です。`);
     }
@@ -342,6 +365,10 @@ function parseDSL(source) {
 
 function renderProcedure(procedure) {
   currentProcedure = procedure;
+  currentEnvironmentDefaults =
+    procedure && procedure.environment instanceof Map
+      ? new Map(procedure.environment)
+      : new Map();
   procedureTitle.textContent = procedure.title || "手順一覧";
   procedureDescription.textContent = procedure.description || "";
 
@@ -670,6 +697,13 @@ function collectVariables(procedure) {
     return [];
   }
   const names = new Set();
+  if (procedure.environment instanceof Map) {
+    procedure.environment.forEach((_value, name) => {
+      names.add(name);
+    });
+  } else if (procedure.environment && typeof procedure.environment === "object") {
+    Object.keys(procedure.environment).forEach((name) => names.add(name));
+  }
   procedure.steps.forEach((step) => {
     step.commands.forEach((command) => {
       (command.variables || []).forEach((name) => names.add(name));
@@ -685,6 +719,8 @@ function syncVariableState(variables) {
       nextPending.set(name, pendingVariableValues.get(name));
     } else if (currentVariableValues.has(name)) {
       nextPending.set(name, currentVariableValues.get(name));
+    } else if (currentEnvironmentDefaults.has(name)) {
+      nextPending.set(name, currentEnvironmentDefaults.get(name));
     } else {
       nextPending.set(name, "");
     }
@@ -695,6 +731,8 @@ function syncVariableState(variables) {
   variables.forEach((name) => {
     if (currentVariableValues.has(name)) {
       nextCurrent.set(name, currentVariableValues.get(name));
+    } else if (currentEnvironmentDefaults.has(name)) {
+      nextCurrent.set(name, currentEnvironmentDefaults.get(name));
     }
   });
   currentVariableValues = nextCurrent;
