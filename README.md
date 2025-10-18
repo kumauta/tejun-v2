@@ -42,6 +42,7 @@ command: ...
 - `note` は直前の `step` / `command` に対する補足説明です（任意、複数可）。
 - `warn`（または `warning`）は `note` と同じ書き方で、画面上では赤字で強調表示されます。
 - `command` は1つ以上必要です。同じステップ内で複数指定すると、実行順のリストとして表示されます。
+- `env` を使うと、変数入力フォームへ初期値を埋め込めます（例: `env: TARGET_HOST=stg-app01`）。
 - `#` または `//` で始まる行はコメントとして無視されます。
 
 ### 複数行コマンドの記法
@@ -86,6 +87,18 @@ warn: 作業完了後に監視へ連絡する
 command: ssh deploy@{{TARGET_HOST}}
 command: sudo systemctl restart {{SERVICE_NAME}}
 ```
+
+### 環境変数の事前設定
+
+- DSL内で `env: NAME=VALUE` を指定すると、変数入力フォームへ初期値として読み込まれます。
+- 例:
+
+  ```
+  env: TARGET_HOST=stg-app01.internal
+  env: SERVICE_NAME=example-api
+  ```
+
+- フォームに手動入力した値が常に優先されるため、DSL側の初期値を上書きして運用できます。
 
 
 構文エラーがある場合、入力欄下部にエラーメッセージが表示されます。
