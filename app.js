@@ -27,6 +27,11 @@ let lastExportMarkdown = "";
 let currentVariables = [];
 let currentVariableValues = new Map();
 let pendingVariableValues = new Map();
+let hasUnsavedChanges = false;
+
+const markUnsavedChanges = () => {
+  hasUnsavedChanges = true;
+};
 
 if (exportCopyButton && !exportCopyButton.dataset.defaultLabel) {
   exportCopyButton.dataset.defaultLabel = exportCopyButton.textContent || "Markdownをコピー";
@@ -68,6 +73,7 @@ command: sudo systemctl status {{SERVICE_NAME}}
 loadExampleButton.addEventListener("click", () => {
   dslInput.value = DEFAULT_DSL;
   renderProcedureFromSource(DEFAULT_DSL);
+  markUnsavedChanges();
 });
 
 parseButton.addEventListener("click", () => {
@@ -98,6 +104,20 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && exportModal && !exportModal.hidden) {
     closeExportModal();
   }
+});
+
+document.addEventListener("input", (event) => {
+  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+    markUnsavedChanges();
+  }
+});
+
+window.addEventListener("beforeunload", (event) => {
+  if (!hasUnsavedChanges) {
+    return;
+  }
+  event.preventDefault();
+  event.returnValue = "";
 });
 
 if (variablesForm) {
