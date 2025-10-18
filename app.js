@@ -1,5 +1,6 @@
 const parseButton = document.getElementById("parse-button");
 const loadExampleButton = document.getElementById("load-example");
+const clearDslButton = document.getElementById("clear-dsl");
 const dslInput = document.getElementById("dsl-input");
 const parseError = document.getElementById("parse-error");
 const procedureTitle = document.getElementById("procedure-title");
@@ -38,12 +39,12 @@ if (exportCopyButton && !exportCopyButton.dataset.defaultLabel) {
   exportCopyButton.dataset.defaultLabel = exportCopyButton.textContent || "Markdownをコピー";
 }
 
-const DEFAULT_DSL = `title: サーバーロールアウト手順
-description: stagingサーバーへアプリケーションをデプロイする例です。開始前にアラートを抑止してください。
-
-env: TARGET_HOST=stg-app01.internal
+const DEFAULT_DSL = `env: TARGET_HOST=stg-app01.internal
 env: SERVICE_NAME=sample-app
 env: APP_DIRECTORY=/srv/sample-app
+
+title: サーバーロールアウト手順
+description: stagingサーバーへアプリケーションをデプロイする例です。開始前にアラートを抑止してください。
 
 step: サーバーにログイン
 note: 作業アカウントを利用
@@ -84,6 +85,10 @@ loadExampleButton.addEventListener("click", () => {
 parseButton.addEventListener("click", () => {
   renderProcedureFromSource(dslInput.value);
 });
+
+if (clearDslButton) {
+  clearDslButton.addEventListener("click", handleClearDsl);
+}
 
 exportButton.addEventListener("click", handleExportClick);
 
@@ -845,6 +850,58 @@ function commandHasActivity(commandId) {
   const history = copyHistory.get(commandId);
   const evidences = evidenceRecords.get(commandId);
   return (history && history.length > 0) || (evidences && evidences.length > 0);
+}
+
+function handleClearDsl() {
+  if (dslInput) {
+    dslInput.value = "";
+    dslInput.focus();
+  }
+  if (parseError) {
+    parseError.textContent = "";
+  }
+
+  currentProcedure = null;
+  lastExportMarkdown = "";
+  currentVariables = [];
+  currentVariableValues = new Map();
+  pendingVariableValues = new Map();
+  currentEnvironmentDefaults = new Map();
+
+  copyHistory.clear();
+  evidenceRecords.clear();
+
+  if (variablesFields) {
+    variablesFields.replaceChildren();
+  }
+  if (variablesPanel) {
+    variablesPanel.hidden = true;
+  }
+  if (applyVariablesButton) {
+    applyVariablesButton.disabled = true;
+  }
+
+  updateApplyButtonState();
+
+  if (stepsContainer) {
+    stepsContainer.replaceChildren();
+  }
+  if (procedureTitle) {
+    procedureTitle.textContent = "手順一覧";
+  }
+  if (procedureDescription) {
+    procedureDescription.textContent = "";
+  }
+
+  if (exportModal && !exportModal.hidden) {
+    closeExportModal();
+  }
+  if (exportOutput) {
+    exportOutput.value = "";
+  }
+
+  updateExportButtonState();
+  markUnsavedChanges();
 }
 
 function updateExportButtonState() {

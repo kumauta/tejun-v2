@@ -104,6 +104,19 @@ button:disabled {
   transform: none;
 }
 
+.editor-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.editor-actions button {
+  flex: none;
+}
+
+#clear-dsl {
+  background: #ef4444;
+}
+
 #parse-button {
   min-width: 140px;
 }
@@ -548,6 +561,10 @@ button:disabled {
   .variables-panel {
     background: #1e293b;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  #clear-dsl {
+    background: #f87171;
   }
 
   .variable-label {
