@@ -542,7 +542,7 @@ function buildStepElement(step, displayIndex) {
       const timestamp = formatTimestamp(now);
       const iso = now.toISOString();
       const records = evidenceRecords.get(command.id) ?? [];
-      records.unshift({ timestamp, iso, text: value });
+      records.push({ timestamp, iso, text: value });
       evidenceRecords.set(command.id, records);
       updateEvidenceRecords(evidenceRecordsEl, records);
       evidenceInput.value = "";
@@ -577,7 +577,7 @@ async function handleCopy(command, button, historyEl, evidenceForm, evidenceInpu
     const timestamp = formatTimestamp(new Date());
 
     const historyList = copyHistory.get(command.id) ?? [];
-    historyList.unshift(timestamp);
+    historyList.push(timestamp);
     copyHistory.set(command.id, historyList);
     updateHistory(historyEl, historyList);
     showEvidenceForm(evidenceForm, evidenceInput);
@@ -632,7 +632,8 @@ function updateHistory(historyEl, historyList) {
     return;
   }
 
-  historyList.slice(0, 5).forEach((timestamp) => {
+  const recent = historyList.slice(-5);
+  recent.forEach((timestamp) => {
     const badge = document.createElement("span");
     badge.textContent = timestamp;
     historyEl.appendChild(badge);
