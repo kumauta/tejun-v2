@@ -104,6 +104,18 @@ button:disabled {
   transform: none;
 }
 
+.copy-button.copy-button-completed {
+  background: #16a34a;
+}
+
+.copy-button.copy-button-completed:hover {
+  box-shadow: 0 6px 16px rgba(22, 163, 74, 0.35);
+}
+
+.copy-button.copy-button-completed:active {
+  box-shadow: none;
+}
+
 .editor-actions {
   display: flex;
   gap: 0.5rem;

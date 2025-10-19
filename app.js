@@ -469,12 +469,18 @@ function buildStepElement(step, displayIndex) {
     }
 
     const commandReady = areCommandVariablesResolved(command);
+    const completedHistory = copyHistory.get(command.id) ?? [];
     if (!commandReady && command.variables.length > 0) {
       copyButton.disabled = true;
       copyButton.textContent = "変数未設定";
+      clearCopyButtonCompletion(copyButton);
     } else {
       copyButton.disabled = false;
-      copyButton.textContent = copyButton.dataset.defaultLabel || "コピー";
+      if (completedHistory.length > 0) {
+        setCopyButtonCompleted(copyButton, true);
+      } else {
+        setCopyButtonCompleted(copyButton, false);
+      }
     }
 
     const historyKey = command.id;
@@ -536,7 +542,7 @@ function buildStepElement(step, displayIndex) {
       const timestamp = formatTimestamp(now);
       const iso = now.toISOString();
       const records = evidenceRecords.get(command.id) ?? [];
-      records.unshift({ timestamp, iso, text: value });
+      records.push({ timestamp, iso, text: value });
       evidenceRecords.set(command.id, records);
       updateEvidenceRecords(evidenceRecordsEl, records);
       evidenceInput.value = "";
@@ -571,25 +577,29 @@ async function handleCopy(command, button, historyEl, evidenceForm, evidenceInpu
     const timestamp = formatTimestamp(new Date());
 
     const historyList = copyHistory.get(command.id) ?? [];
-    historyList.unshift(timestamp);
+    historyList.push(timestamp);
     copyHistory.set(command.id, historyList);
     updateHistory(historyEl, historyList);
     showEvidenceForm(evidenceForm, evidenceInput);
     updateExportButtonState();
 
-    const originalLabel = button.textContent;
     button.textContent = "コピー済み";
     button.disabled = true;
     setTimeout(() => {
-      button.textContent = originalLabel;
       button.disabled = false;
+      setCopyButtonCompleted(button, true);
     }, 1500);
   } catch (error) {
     console.error("Copy failed", error);
     button.textContent = "コピー失敗";
     button.disabled = true;
     setTimeout(() => {
-      button.textContent = "コピー";
+      const history = copyHistory.get(command.id) ?? [];
+      if (history.length > 0) {
+        setCopyButtonCompleted(button, true);
+      } else {
+        setCopyButtonCompleted(button, false);
+      }
       button.disabled = false;
     }, 2000);
   }
@@ -622,7 +632,8 @@ function updateHistory(historyEl, historyList) {
     return;
   }
 
-  historyList.slice(0, 5).forEach((timestamp) => {
+  const recent = historyList.slice(-5);
+  recent.forEach((timestamp) => {
     const badge = document.createElement("span");
     badge.textContent = timestamp;
     historyEl.appendChild(badge);
@@ -864,6 +875,29 @@ function formatCommandDisplayText(command, resolvedText) {
   return lines
     .map((line) => (line && line.length > 0 ? `${prefix} ${line}` : prefix))
     .join("\n");
+}
+
+function setCopyButtonCompleted(button, completed) {
+  if (!button) {
+    return;
+  }
+  if (!button.dataset.defaultLabel) {
+    button.dataset.defaultLabel = button.textContent || "コピー";
+  }
+  if (completed) {
+    button.classList.add("copy-button-completed");
+    button.textContent = "再コピー";
+  } else {
+    button.classList.remove("copy-button-completed");
+    button.textContent = button.dataset.defaultLabel || "コピー";
+  }
+}
+
+function clearCopyButtonCompletion(button) {
+  if (!button) {
+    return;
+  }
+  button.classList.remove("copy-button-completed");
 }
 
 function commandHasActivity(commandId) {
